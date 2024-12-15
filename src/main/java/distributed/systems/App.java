@@ -41,11 +41,33 @@ public class App implements Watcher {
         List<String> children = zooKeeper.getChildren(ELECTION_NAMESPACE, false);
         Collections.sort(children);
         String smallestChild = children.get(0);
+
         if (smallestChild.equals(currentZnodeName)) {
             System.out.println("I am the leader of " + currentZnodeName);
             return;
         }
-        System.out.println("I am not the leader, " + smallestChild + " is the leader of " + currentZnodeName);
+        System.out.println("I am the leader of " + smallestChild);
+    }
+
+    public void reelectLeader() throws InterruptedException, KeeperException {
+        String predecessorZnodeName = "";
+        Stat predeccesorStat = null;
+        while (predeccesorStat == null) {
+            List<String> children = zooKeeper.getChildren(ELECTION_NAMESPACE, false);
+            Collections.sort(children);
+            String smallestChild = children.get(0);
+
+            if (smallestChild.equals(currentZnodeName)) {
+                System.out.println("I am the leader of " + currentZnodeName);
+            }
+            else {
+                System.out.println("I am not the leader");
+                int predecessorIndex = Collections.binarySearch(children, currentZnodeName) - 1;
+                predecessorZnodeName = children.get(predecessorIndex);
+                predeccesorStat = zooKeeper.exists(ELECTION_NAMESPACE + "/" + predecessorZnodeName, this);
+            }
+        }
+        System.out.println("Watching znode " + predecessorZnodeName);
     }
 
     public void connectToZookeeper() throws IOException {
@@ -96,6 +118,13 @@ public class App implements Watcher {
 
             case NodeDeleted:
                 System.out.println("Zookeeper Node Deleted " + TARGET_ZNODE);
+                try {
+                    reelectLeader();
+                }
+                catch (InterruptedException e) {
+                }
+                catch (KeeperException e) {
+                }
                 break;
             case NodeCreated:
                 System.out.println("Zookeeper Node Created " + TARGET_ZNODE);
